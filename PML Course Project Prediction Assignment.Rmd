@@ -1,0 +1,125 @@
+---
+title: "PML Course Project Prediction Assignment"
+author: "jh"
+date: "4/5/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prediction Assignment
+## by JH
+
+## Overview
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+In this project, I will select a proper model from comparing multiple training models on the training data set and use the selected model to predict 20 different test cases.
+
+## 1. Necessary Libraries
+Load all the necessary libraries
+```{r}
+library(caret)
+library(rattle)
+library(randomForest)
+library(gbm)
+set.seed(1209)
+```
+
+## 2. Data Loading, Cleaning, and Slicing
+2.1. Load the training data
+```{r}
+train <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"),header=TRUE, na.strings = c("", "NA"))
+dim(train)
+```
+There are 19622 observations and 160 variables in the training set.
+
+2.2. Load the test data
+```{r}
+test <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"),header=TRUE, na.strings = c("", "NA"))
+dim(test)
+```
+There are 20 observations and 160 variables in the test set. 
+
+2.3. Clean the training and test data
+```{r}
+str(train)
+```
+
+We observed columns with NAs as majority and columns with subject identification and time stamps information. These columns are not needed for building our models and thus will be removed. We will remove the columns with over 95% of NAs as well as the columns for subject identifcation and time stamps information (columns 1 to 5).
+```{r}
+train_col_remove <- which(colSums(is.na(train))>0.95*dim(train)[1])
+train_clean <- train[,-train_col_remove]
+train_clean <- train_clean[, -c(1:5)]
+test_col_remove <- which(colSums(is.na(test))>0.95*dim(test)[1])
+test_clean <- test[,-test_col_remove]
+test_clean <- test_clean[, -c(1:5)]
+dim(train_clean)
+dim(test_clean)
+```
+Now we have a training data set and a testing data set with 55 variables. 
+
+2.4. We will slice the training data set with a partition percentage of 75% to create a sub training data (75% of training data) to build models and a sub test set (25% of training data). We will assign the testing data as the validation set.
+```{r}
+inTrain <- createDataPartition(y=train_clean$classe, p=0.75, list=FALSE)
+sub_training <- train_clean[inTrain, ]
+sub_test <- train_clean[-inTrain, ]
+validation <- test_clean
+```
+
+## 3. Model Training
+
+We will apply three modeling methods to the sub_training data set, namely Classification Trees, Random Forests, and Generalized Boosted Model. Then we will choose test the models with the sub_test set and select the model with the highest accuracy to predict the validation test set. We will use 5-fold cross validation to the models.
+
+3.1. Prediction with Classification Trees
+```{r}
+tree_cv_ctrl <- trainControl(method = "cv", number=5)
+tree_mod_fit <- train(classe~., method="rpart", data=sub_training, trControl = tree_cv_ctrl)
+fancyRpartPlot(tree_mod_fit$finalModel)
+```
+
+Predict with sub_test data set
+```{r}
+tree_mod_pred <- predict(tree_mod_fit, newdata = sub_test)
+tree_con_mat <- confusionMatrix(sub_test$classe, tree_mod_pred)
+tree_con_mat
+```
+With the classification tree model, the accuracy is 0.5006.
+
+3.2. Prediction with Random Forest
+```{r}
+rf_cv_ctrl <- trainControl(method = "cv", number=5)
+rf_mod_fit <- train(classe~., method="rf", data=sub_training, trControl = rf_cv_ctrl)
+```
+
+Predict with sub_test data set
+```{r}
+rf_mod_pred <- predict(rf_mod_fit, newdata = sub_test)
+rf_con_mat <- confusionMatrix(sub_test$classe, rf_mod_pred)
+rf_con_mat
+```
+With the classification tree model, the accuracy is 0.999.
+
+3.3. Prediction with Generalized Boosted Model
+```{r}
+gbm_cv_ctrl <- trainControl(method = "cv", number=5)
+gbm_mod_fit <- train(classe~., method="gbm", data=sub_training, trControl = gbm_cv_ctrl, verbose=FALSE)
+```
+
+Predict with sub_test data set
+```{r}
+gbm_mod_pred <- predict(gbm_mod_fit, newdata = sub_test)
+gbm_con_mat <- confusionMatrix(sub_test$classe, gbm_mod_pred)
+gbm_con_mat
+```
+With the classification tree model, the accuracy is 0.9886.
+
+## 4. Test Set Prediction
+
+Within the above models, the Random Forest Model achieved the highest accuracy. We will apply the Random Forest model to predict with the test set, aka the validation set. The predictions are shown at the end.
+
+```{r}
+validation_pred <- predict(rf_mod_fit, newdata = validation)
+validation_pred
+```
